@@ -1,0 +1,27 @@
+{
+  "name": "auto-apply-worker",
+  "version": "1.0.0",
+  "description": "Auto-apply worker — browses job pages and fills applications automatically with human-in-the-loop CAPTCHA handling",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "jest",
+    "playwright:install": "playwright install chromium --with-deps"
+  },
+  "dependencies": {
+    "playwright": "^1.58.2",
+    "dotenv": "^16.4.5",
+    "node-fetch": "^3.3.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
