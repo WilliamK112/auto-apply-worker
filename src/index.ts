@@ -211,6 +211,15 @@ async function main(): Promise<void> {
   // Launch browser once and reuse it
   await browser.launch();
 
+  // Ensure LinkedIn session — if no saved cookies, opens login page for manual auth
+  console.log("[Worker] Checking LinkedIn session...");
+  const sessionReady = await browser.ensureLinkedInSession();
+  if (!sessionReady) {
+    log("❌ LinkedIn session not ready — cannot start. Please log in and restart.");
+    await browser.close();
+    process.exit(1);
+  }
+
   let pollCount = 0;
   let running = true;
 

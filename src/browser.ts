@@ -1,13 +1,16 @@
 import { chromium, type Browser, type BrowserContext } from "playwright";
 import type { WorkerConfig } from "./types";
+import { FileSessionStore, ensureLinkedInLogin } from "./session-store";
 
 export class BrowserManager {
   private browser: Browser | null = null;
   private context: BrowserContext | null = null;
   private config: WorkerConfig;
+  private sessionStore: FileSessionStore;
 
   constructor(config: WorkerConfig) {
     this.config = config;
+    this.sessionStore = new FileSessionStore();
   }
 
   async launch(): Promise<void> {
@@ -20,11 +23,10 @@ export class BrowserManager {
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
-        "--disable-blink-features=AutomationControlled", // avoid bot detection
+        "--disable-blink-features=AutomationControlled",
       ],
     });
 
-    // New context per session (fresh cookies/UA for each user session)
     this.context = await this.browser.newContext({
       viewport: { width: 1280, height: 900 },
       userAgent:
@@ -36,6 +38,11 @@ export class BrowserManager {
     });
 
     console.log("[Browser] Chromium launched and context ready");
+  }
+
+  async ensureLinkedInSession(): Promise<boolean> {
+    if (!this.context) await this.launch();
+    return ensureLinkedInLogin(this.context!, this.sessionStore, this.config.userId);
   }
 
   async newPage() {

@@ -1,0 +1,11 @@
+[build]
+dockerfilePath = "Dockerfile"
+
+[deploy]
+numInstances = 1
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[environment]
+AUTO_APPLY_HEADLESS = "true"
+AUTO_APPLY_DELAY_MS = "8000"
