@@ -19,7 +19,9 @@
 import "dotenv/config";
 import { BrowserManager } from "./browser";
 import { AppOsApi } from "./api";
+import { fillAndSubmitGreenhouseApplication } from "./fillers/greenhouse";
 import { detectLinkedInPageType, fillLinkedInEasyApply, submitLinkedInEasyApply } from "./fillers/linkedin";
+import { loadWorkerProfileFromEnv, type WorkerProfile } from "./profile";
 import { detectCaptcha } from "./captcha";
 import type { QueueJob, WorkerConfig } from "./types";
 
@@ -40,7 +42,7 @@ async function processJob(
   job: QueueJob,
   api: AppOsApi,
   browser: BrowserManager,
-  profile: { email: string; phone: string; resumePath?: string },
+  profile: WorkerProfile,
 ): Promise<void> {
   const jobUrl = job.job.url;
   if (!jobUrl) {
@@ -68,7 +70,57 @@ async function processJob(
 
     // Detect platform
     const url = page.url();
-    if (url.includes("linkedin.com")) {
+    if (job.provider === "greenhouse" || url.includes("greenhouse.io")) {
+      log(`  → Greenhouse page detected`);
+      const result = await fillAndSubmitGreenhouseApplication(page, {
+        email: profile.email,
+        phone: profile.phone,
+        resumePath: profile.resumePath,
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+        fullName: profile.fullName,
+        country: profile.country,
+        linkedinUrl: profile.linkedinUrl,
+        githubUrl: profile.githubUrl,
+        portfolioUrl: profile.portfolioUrl,
+      });
+
+      if (result.captchaDetected) {
+        log(`  ⚠️ Greenhouse CAPTCHA detected — pausing for human-in-the-loop`);
+        const verificationToken = nanoid();
+        await api.updateQueueItem(job.id, {
+          status: "NEEDS_VERIFICATION",
+          verificationToken,
+          errorMessage: result.errorMessage,
+        });
+        await page.close();
+        return;
+      }
+
+      if (result.submitted) {
+        log(`  ✅ Greenhouse application submitted successfully`);
+        await api.updateQueueItem(job.id, {
+          status: "COMPLETED",
+          applicationId: result.applicationUrl,
+        });
+      } else if (result.success) {
+        log(`  ⚠️ Greenhouse flow succeeded without final confirmation: ${result.errorMessage}`);
+        const verificationToken = nanoid();
+        await api.updateQueueItem(job.id, {
+          status: "NEEDS_VERIFICATION",
+          verificationToken,
+          errorMessage: result.errorMessage ?? "Greenhouse needs final manual confirmation",
+        });
+      } else {
+        log(`  ⚠️ Greenhouse needs manual help: ${result.errorMessage}`);
+        const verificationToken = nanoid();
+        await api.updateQueueItem(job.id, {
+          status: "NEEDS_VERIFICATION",
+          verificationToken,
+          errorMessage: result.errorMessage ?? "Greenhouse application needs manual input",
+        });
+      }
+    } else if (url.includes("linkedin.com")) {
       const pageType = await detectLinkedInPageType(page);
       log(`  → LinkedIn page type: ${pageType}`);
 
@@ -198,12 +250,7 @@ async function main(): Promise<void> {
   log(`   Headless: ${config.headless}`);
   log(`   Delay between jobs: ${config.delayBetweenApplications}ms`);
 
-  // Worker profile — in production, load from database/config
-  const workerProfile = {
-    email: process.env.AUTO_APPLY_EMAIL ?? "your@email.com",
-    phone: process.env.AUTO_APPLY_PHONE ?? "+1234567890",
-    resumePath: process.env.AUTO_APPLY_RESUME_PATH,
-  };
+  const workerProfile = loadWorkerProfileFromEnv();
 
   const api = new AppOsApi(config);
   const browser = new BrowserManager(config);
@@ -211,15 +258,7 @@ async function main(): Promise<void> {
   // Launch browser once and reuse it
   await browser.launch();
 
-  // Ensure LinkedIn session — if no saved cookies, opens login page for manual auth
-  console.log("[Worker] Checking LinkedIn session...");
-  const sessionReady = await browser.ensureLinkedInSession();
-  if (!sessionReady) {
-    log("❌ LinkedIn session not ready — cannot start. Please log in and restart.");
-    await browser.close();
-    process.exit(1);
-  }
-
+  let linkedInSessionChecked = false;
   let pollCount = 0;
   let running = true;
 
@@ -240,6 +279,22 @@ async function main(): Promise<void> {
       log(`📋 Poll #${pollCount}: ${queueStats.pending} pending, ${queueStats.needsVerification} need verification, ${queueStats.completed} completed, ${queueStats.failed} failed`);
 
       if (pending.length > 0) {
+        const hasLinkedInJobs = pending.some((job) => {
+          const url = job.job.url ?? "";
+          return job.provider === "linkedin" || url.includes("linkedin.com");
+        });
+
+        if (hasLinkedInJobs && !linkedInSessionChecked) {
+          console.log("[Worker] Checking LinkedIn session...");
+          const sessionReady = await browser.ensureLinkedInSession();
+          if (!sessionReady) {
+            log("❌ LinkedIn session not ready — LinkedIn jobs cannot be processed yet.");
+            await sleep(30000);
+            continue;
+          }
+          linkedInSessionChecked = true;
+        }
+
         for (const job of pending) {
           if (!running) break;
           await processJob(job, api, browser, workerProfile);

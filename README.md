@@ -32,6 +32,13 @@ npx playwright install chromium
 | `AUTO_APPLY_USER_ID` | Your user ID from application-os database | `cuid...` |
 | `AUTO_APPLY_EMAIL` | Email for form fields | `you@example.com` |
 | `AUTO_APPLY_PHONE` | Phone for form fields | `+13478668326` |
+| `AUTO_APPLY_FIRST_NAME` | Applicant first name | `Ching-Wei` |
+| `AUTO_APPLY_LAST_NAME` | Applicant last name | `Kang` |
+| `AUTO_APPLY_FULL_NAME` | Applicant full name | `Ching-Wei Kang` |
+| `AUTO_APPLY_COUNTRY` | Country field value for forms | `Taiwan` |
+| `AUTO_APPLY_LINKEDIN_URL` | LinkedIn profile URL | `https://www.linkedin.com/in/kcw2027/` |
+| `AUTO_APPLY_GITHUB_URL` | GitHub profile URL | `https://github.com/WilliamK112` |
+| `AUTO_APPLY_PORTFOLIO_URL` | Portfolio / website URL | `https://william-kang-site.vercel.app/` |
 | `AUTO_APPLY_RESUME_PATH` | Absolute path to resume PDF | `/path/to/resume.pdf` |
 | `AUTO_APPLY_HEADLESS` | Show browser (`false`) or hide (`true`) | `true` |
 | `AUTO_APPLY_DELAY_MS` | Delay between jobs (LinkedIn rate-limits ~50/day) | `8000` |
@@ -68,6 +75,13 @@ railway variables set AUTO_APPLY_WORKER_SECRET=<your-secret>
 railway variables set AUTO_APPLY_USER_ID=<your-user-id>
 railway variables set AUTO_APPLY_EMAIL=<your-email>
 railway variables set AUTO_APPLY_PHONE=<your-phone>
+railway variables set AUTO_APPLY_FIRST_NAME=<your-first-name>
+railway variables set AUTO_APPLY_LAST_NAME=<your-last-name>
+railway variables set AUTO_APPLY_FULL_NAME=<your-full-name>
+railway variables set AUTO_APPLY_COUNTRY=<your-country>
+railway variables set AUTO_APPLY_LINKEDIN_URL=<your-linkedin-url>
+railway variables set AUTO_APPLY_GITHUB_URL=<your-github-url>
+railway variables set AUTO_APPLY_PORTFOLIO_URL=<your-portfolio-url>
 railway variables set AUTO_APPLY_RESUME_PATH=/app/resume.pdf
 # Upload resume PDF to Railway (Storage → Add File)
 ```
