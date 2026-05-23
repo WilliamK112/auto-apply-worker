@@ -34,8 +34,30 @@ function log(msg: string): void {
   console.log(`[${ts}] ${msg}`);
 }
 
+let activeSleepTimer: NodeJS.Timeout | null = null;
+let activeSleepResolve: (() => void) | null = null;
+
 async function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve) => {
+    activeSleepResolve = resolve;
+    activeSleepTimer = setTimeout(() => {
+      activeSleepTimer = null;
+      activeSleepResolve = null;
+      resolve();
+    }, ms);
+  });
+}
+
+function wakeSleepEarly(): void {
+  if (activeSleepTimer) {
+    clearTimeout(activeSleepTimer);
+    activeSleepTimer = null;
+  }
+  if (activeSleepResolve) {
+    const resolve = activeSleepResolve;
+    activeSleepResolve = null;
+    resolve();
+  }
 }
 
 async function processJob(
@@ -261,16 +283,22 @@ async function main(): Promise<void> {
   let linkedInSessionChecked = false;
   let pollCount = 0;
   let running = true;
+  let shuttingDown = false;
 
-  const shutdown = async () => {
-    log("🛑 Shutdown signal received — finishing current job...");
+  const shutdown = (signal: NodeJS.Signals) => {
+    if (shuttingDown) {
+      log(`🛑 ${signal} received again — shutdown already in progress`);
+      return;
+    }
+
+    shuttingDown = true;
     running = false;
-    await browser.close();
-    process.exit(0);
+    log(`🛑 ${signal} received — stopping new work and waiting for current step to finish...`);
+    wakeSleepEarly();
   };
 
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
 
   while (running) {
     pollCount++;
@@ -289,7 +317,7 @@ async function main(): Promise<void> {
           const sessionReady = await browser.ensureLinkedInSession();
           if (!sessionReady) {
             log("❌ LinkedIn session not ready — LinkedIn jobs cannot be processed yet.");
-            await sleep(30000);
+            if (running) await sleep(30000);
             continue;
           }
           linkedInSessionChecked = true;
@@ -302,11 +330,11 @@ async function main(): Promise<void> {
         }
       } else {
         // No pending jobs — wait before polling again
-        await sleep(15000);
+        if (running) await sleep(15000);
       }
     } catch (err) {
       log(`❌ Poll error: ${err instanceof Error ? err.message : String(err)}`);
-      await sleep(30000); // Back off on error
+      if (running) await sleep(30000); // Back off on error
     }
   }
 
